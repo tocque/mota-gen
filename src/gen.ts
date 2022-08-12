@@ -42,8 +42,20 @@ interface GenOptions {
     /** 区域首层的下楼梯位置 */
     startLoc: Loc;
     items: {
-        jewel: number[]
+        jewel: number[],
+        potion: number[],
         equip: [number, number]
+    },
+    growth: number,
+    itemValue: {
+        y_key: number,
+        b_key: number,
+        r_key: number,
+        g_key: number,
+        hp_100: number,
+        atk_1: number,
+        def_1: number, 
+        mdef_1: number,
     },
     enemies: number[],
     initStatus: {
@@ -209,6 +221,12 @@ export function gen(options: GenOptions): MapContext[] {
      * ## 地图完全生成
      * 将所有房间随机进行连通，不破坏之前标记的墙壁
      * @deprecated 这一步摸了，因为生成房间已经基本搞好了
+     */
+
+    /**
+     * ## 怪物生成
+     * 
+     * 策略：根据攻防配比
      */
 
     /**
