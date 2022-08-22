@@ -1,36 +1,71 @@
-# 地图生成器 改
+# 地图生成器 改二
 
-## 流程
+## 输入基本参数：
 
-从上到下按多级进行生成：
+```js
+interface Param {
+    /** 地图数量 */
+    mapCount: number;
+    /** 怪物数量 */
+    enemyCount: number;
+    enemyTemplates: EnemyTemplate;
+    /** 能力增长率 */
+    growthRate: number;
+    /** 属性: [ 初始值, 增长基数 ] */
+    initState: {
+        atk: [ number, number ],
+        def: [ number, number ],
+        mdef: [ number, number ],
+    },
+    /** 属性价值 */
+    ability: {
+        hp: number,
+        atk: number,
+        def: number,
+        mdef: number,
+    },
+    /** 属性基数 */
+    pointBase: number,
+    items: {
+        key: KeyItem[],
+        greenKey: ValuedItem,
+        pickaxe: ValuedItem,
+        fly: ValuedItem,
+        potion: AbilityItem[],
+        redJewel: AbilityItem[],
+        blueJewel: AbilityItem[],
+        greenJewel: AbilityItem[],
+        yellowJewel: AbilityItem[],
+        equips: AbilityItem[],
+    },
+}
 
-### 地图生成
+type Image = [ string, number, number ];
 
-参数需求: `mapCount: number` 地图数量
+interface KeyItem {
+    value: number;
+    key: Image;
+    door: Image;
+}
 
-这一部分将确定整个地图的情况
+interface ValuedItem {
+    value: number;
+    image: Image;
+}
 
-#### 楼梯生成
+interface Ability {
+    field: "hp" | "atk" | "def" | "mdef";
+    value: number;
+}
 
-参数需求: `startLoc: [number, number]` 区域首层的下楼梯位置
+interface AbilityItem {
+    value: Ability[];
+    image: Image;
+}
 
-逐层生成上下楼梯位置
+```
 
-#### 房间生成
-
-按照系数在地图上划出多个不连通区域标记为房间，标记房间周围一圈为墙壁，随机打开墙壁，标记为入口
-
-#### 地图完全生成
-
-将所有房间随机进行连通，不破坏之前标记的墙壁
-
-#### 标记房间节点类型
-
-根据房间连接图，房间可能是不同类型的，例如说，房间可能是 起点 / 终点，或者其他叶子，割点，甚至不连通节点。
-
-### 房间布设
-
-#### 怪物
+## 生成怪物
 
 参数需求: `enemies: number[]`
 
@@ -43,8 +78,6 @@ atk: number 攻击力成长率
 def: number 防御力成长率
 ```
 
-在生成怪物后作者需要取名并添加怪物素材，并可以对怪物进行微调
-
 随后怪物将输入怪物调参器，在这其中将执行如下步骤：
 
 1. 将所有怪物按顺序分配到每个地图中，例如说
@@ -52,36 +85,149 @@ def: number 防御力成长率
 2. 根据数值膨胀率算出每个地图的预期角色能力值，通过调节怪物成长度将其损血量固定在一个范围内，目前经验值为一基数基础血瓶，上下浮动20%
 3. 计算每个怪在所有地图的预期伤害
 
-#### 布设剑盾
+在生成怪物后作者需要取名并添加怪物素材
 
-#### 标记生成位置
+从上到下按多级进行生成：
 
-参数需求: `items: { normal: number[], valued: numer[], key: number[] }`
+## 地图生成
 
-道具分为三种等级，例如：
+这一部分将确定整个地图的情况
 
-| 类型 | 普通道具 | 高价值 | 关键道具 |
-| :-: | :-: | :-: | :-: |
-| 钥匙 | 黄钥匙 | 蓝钥匙 | 红钥匙 |
-| 宝石 | +1 | +2 | +5 |
-| 装备 ||| 剑盾等 |
-| 道具 ||| 破墙镐 飞行器 |
+### 地图标记概述
 
-1 : 3 : 10 : 20
+地图上的每个节点都会被标记为一种类型：
 
-首先标记所有的道具生成地点
+```ts
+enum BlockType {
+    Empty,
+    Wall,
+    Event,
+    Stair,
+}
 
-> 尽量标记叶节点为生成位置，对于房间，不生成在入口旁边
+interface EmptyBlock {
+    type: BlockType.Empty;
+}
 
-#### 布设房间
+interface WallBlock {
+    type: BlockType.Wall;
+    breakable: boolean;
+}
 
-从下到上 bfs 全楼层，随机放置钥匙，保证 bfs 流程中钥匙数量始终为正
+interface EventBlock {
+    type: BlockType.Event;
+    eventId: number;
+}
 
-随机散布道具，特别的，关键物品必须放入重要房间中，高价值物品出现的概率小于普通物品
+interface StairBlock {
+    type: BlockType.Stair;
+    dir: "up" | "down";
+}
 
-### 生成BOSS层
+type Block =
+    | EmptyBlock
+    | WallBlock
+    | EventBlock
+    | StairBlock
+    ;
+```
 
-#### 生成BOSS
+### 楼梯生成
+
+参数需求: `startLoc: [number, number]` 区域首层的下楼梯位置
+
+逐层生成上下楼梯位置
+
+### 房间生成
+
+按照系数在地图上划出多个不连通区域标记为房间，标记房间周围一圈为墙壁，随机打开墙壁，标记为入口
+
+### 地图完全生成
+
+将所有房间随机进行连通，不破坏之前标记的墙壁
+
+### 房间分析
+
+根据房间连接图，房间可能是不同类型的，例如说，房间可能是 起点 / 终点，或者其他叶子，割点，甚至不连通节点。
+
+```ts
+enum RoomNodeType {
+    Leaf,
+    Cut,
+    CutOfMain,
+    Normal,
+    Isolate,
+    Source,
+    Terminal,
+}
+```
+
+更进一步的，对于割点，入口存在方向，会尝试标记需要堵住的入口
+
+这一步同样会分析房间的形状，确定入口后是否能添加守卫
+
+- 可能的情况：多个入口向内为同一节点 / 单个入口向内有多个节点，这类入口会被标记
+
+```ts
+enum RoomEntryType {
+    Normal,
+    SeveralForOne,
+    OneForSeveral,
+}
+
+type NormalRoomEntry = [ RoomEntryType.Normal, Loc, Loc ];
+type SeveralForOneRoomEntry = [ RoomEntryType.SeveralForOne, Loc[], Loc ];
+type OneForSeveralRoomEntry = [ RoomEntryType.OneForSeveral, Loc, Loc[] ];
+
+type RoomEntry =
+    | NormalRoomEntry
+    | SeveralForOneRoomEntry
+    | OneForSeveralRoomEntry
+    ;
+```
+
+## 房间布设
+
+### 布设装备
+
+首先将装备随机分布在流程中，每个装备对应一个流程等级
+
+装备的布设条件：
+
+楼层 <= 流程等级
+
+普通节点 > 叶节点
+二入口 > 一入口
+
+房间大小不小于2
+
+若无满足条件的房间则直接重新进行地图生成
+
+### 布设难度控制房间
+
+将楼层分段
+
+难度控制布设条件：
+
+属于指定段落
+
+叶节点 一入口
+
+房间大小为3～4
+
+若无满足条件的房间则直接重新进行地图生成
+
+### 布设普通房间
+
+按所在楼层，以正态分布赋予每个房间流程等级
+
+随机生成房间价值 / 房间回报，回报基于增长系数随机
+
+为房间分配指定价值的消耗和回报
+
+## 生成BOSS层
+
+### 生成BOSS
 
 参数需求: `initStatus: status[]`
 
@@ -89,7 +235,7 @@ def: number 防御力成长率
 
 统计所有的能力，确定 boss 能力的大概值并生成
 
-#### 生成BOSS层
+### 生成BOSS层
 
 没啥想法，为了简单考虑，此层只有咸鱼门和BOSS
 

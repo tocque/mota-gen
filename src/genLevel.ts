@@ -1,4 +1,6 @@
 import { range, inRange, isEqual, random, cloneDeep, shuffle } from "lodash-es";
+import { EnemyTemplate } from "./genEnemy";
+import { normalRandom, randomPickElement } from "./utils";
 
 type Loc = [number, number];
 
@@ -29,11 +31,12 @@ enum MapMark {
     DOOR_1 = 1 << 15,
     DOOR_2 = 1 << 16,
     DOOR_3 = 1 << 17,
+    DOOR_4 = 1 << 18,
 
-    ENEMY = 1 << 18,
-    BOSS = 1 << 19,
+    ENEMY = 1 << 19,
+    BOSS = 1 << 20,
 
-    BASE = 1 << 20,
+    BASE = 1 << 21,
 }
 
 interface GenOptions {
@@ -45,7 +48,8 @@ interface GenOptions {
         jewel: number[]
         equip: [number, number]
     },
-    enemies: number[],
+    enemies: EnemyTemplate[],
+    growth: number,
     initStatus: {
         atk: number,
         def: number,
@@ -82,28 +86,6 @@ interface MapContext {
     downLoc: Loc,
     rooms: Room[],
     map: MapArray;
-}
-
-function normalRandom(mean: number, std: number) {
-    let u = 0.0, v = 0.0, w = 0.0, c = 0.0;
-    do {
-
-        // 获得两个（-1,1）的独立随机变量
-        u = Math.random() * 2 - 1.0;
-        v = Math.random() * 2 - 1.0;
-        w = u * u + v * v;
-    } while (w == 0.0 || w >= 1.0)
-    // Box-Muller转换
-    c = Math.sqrt((-2 * Math.log(w)) / w);
-    const normal = mean + (u * c) * std;
-    return Math.trunc(normal);
-}
-
-function randomPickElement<T>(array: T[], remove = false): T {
-    const id = random(0, array.length-1);
-    const elm = array[id];
-    if (remove) array.splice(id, 1);
-    return elm;
 }
 
 function allPairs<T>(array: T[]): [ T, T ][] {
@@ -631,16 +613,15 @@ export function gen(options: GenOptions): MapContext[] {
 
     function fillRooms(maps: MapContext[]) {
 
-        const rooms: [number, number, Room][] = [];
-
-        maps.forEach((map, i) => {
-            rooms.push(...map.rooms.map((e) => [ i, 0, e ] as [ number, number, Room ]));
-        })
-
         /**
          * 首先填充剑盾
          */
         {
+            const rooms: [number, number, Room][] = [];
+    
+            maps.forEach((map, i) => {
+                rooms.push(...map.rooms.map((e) => [ i, 0, e ] as [ number, number, Room ]));
+            })
             // 对房间打分
             rooms.forEach((room) => {
                 let score = 0;
@@ -684,64 +665,67 @@ export function gen(options: GenOptions): MapContext[] {
             const sword = rooms.pop()!;
             const shield = rooms.pop()!;
 
-            batchMark(maps[sword[0]].map, sword[2].inner, MapMark.ITEM_IMPORTANT);
-            batchMark(maps[shield[0]].map, shield[2].inner, MapMark.ITEM_IMPORTANT);
+            batchMark(maps[sword[0]].map, sword[2].border, MapMark.WALL_UNBREAK);
+            batchMark(maps[shield[0]].map, shield[2].border, MapMark.WALL_UNBREAK);
 
             printMap(maps[sword[0]]);
             printMap(maps[shield[0]]);
         }
 
         /**
-         * 难度控制房间
+         * 难度控制房间，每3～4个楼层随机一个
          */
         {
-            // 对房间打分
-            rooms.forEach((room) => {
-                let score = 0;
-                const [ floor, , { type, entry, inner } ] = room;
-                score += floor * 1;
-                score += random(0, 10);
-                // 节点类型
-                switch (type) {
-                    case RoomNodeType.Leaf: score += 40; break;
-                    case RoomNodeType.Normal: score += 20; break;
-                    case RoomNodeType.Cut: score += 0; break;
-                    case RoomNodeType.Source:
-                    case RoomNodeType.Isolate:
-                    case RoomNodeType.CutOfMain:
-                        score -= 100; break;
-                }
-                const entryCount = entry.length;
-                switch (entryCount) {
-                    case 1:
-                        score += 20; break;
-                    case 0:
-                        score += 0; break;
-                    default:
-                        score -= 100; break;
-                }
-                const innerCount = inner.length;
-                switch (innerCount) {
-                    case 4:
-                        score += 20; break;
-                    case 3:
-                        score += 10; break;
-                    case 2:
-                        score += 0; break;
-                    default:
-                        score -= 100; break;
-                }
-                room[1] = score;
-            });
+            let i = 0;
+            while (i < mapCount) {
+                const begin = i, end = Math.min(i + Math.round(normalRandom(3.5, 1)), mapCount);
+                const rooms: [number, number, Room][] = [];
+        
+                maps.slice(begin, end).forEach((map, i) => {
+                    rooms.push(...map.rooms.map((e) => [ i, 0, e ] as [ number, number, Room ]));
+                });
+                // 对房间打分
+                rooms.forEach((room) => {
+                    let score = 0;
+                    const [ , , { type, entry, inner } ] = room;
+                    score += random(0, 10);
+                    // 节点类型
+                    switch (type) {
+                        case RoomNodeType.Leaf: score += 40; break;
+                        case RoomNodeType.Normal: score += 20; break;
+                        case RoomNodeType.Cut: score += 0; break;
+                        case RoomNodeType.Source:
+                        case RoomNodeType.Isolate:
+                        case RoomNodeType.CutOfMain:
+                            score -= 100; break;
+                    }
+                    const entryCount = entry.length;
+                    switch (entryCount) {
+                        case 1:
+                            score += 20; break;
+                        default:
+                            score -= 100; break;
+                    }
+                    const innerCount = inner.length;
+                    switch (innerCount) {
+                        case 4:
+                            score += 20; break;
+                        case 3:
+                            score += 10; break;
+                        case 2:
+                            score += 0; break;
+                        default:
+                            score -= 100; break;
+                    }
+                    room[0] = score;
+                });
 
-            rooms.sort((a, b) => a[1] - b[1]);
-            const need = Math.trunc(mapCount / 4);
+                const [ floorId, , room ] = rooms.pop()!;
+                batchMark(maps[floorId].map, room.border, MapMark.WALL_UNBREAK);
+                printMap(maps[floorId]);
 
-            range(0, need).forEach(() => {
-                const room = rooms.pop()!;
-                batchMark(maps[room[0]].map, room[2].border, MapMark.WALL_UNBREAK);
-                printMap(maps[room[0]]);
-            })
+                i = end;
+            }
         }
 
         /**
