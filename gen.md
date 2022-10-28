@@ -62,7 +62,6 @@ interface AbilityItem {
     value: Ability[];
     image: Image;
 }
-
 ```
 
 ## 生成怪物
@@ -105,21 +104,25 @@ enum BlockType {
     Stair,
 }
 
-interface EmptyBlock {
+interface BlockBase {
+    type: BlockType;
+}
+
+interface EmptyBlock extends BlockBase {
     type: BlockType.Empty;
 }
 
-interface WallBlock {
+interface WallBlock extends BlockBase {
     type: BlockType.Wall;
     breakable: boolean;
 }
 
-interface EventBlock {
+interface EventBlock extends BlockBase {
     type: BlockType.Event;
     eventId: number;
 }
 
-interface StairBlock {
+interface StairBlock extends BlockBase {
     type: BlockType.Stair;
     dir: "up" | "down";
 }
@@ -140,13 +143,27 @@ type Block =
 
 ### 房间生成
 
+```ts
+interface Room {
+    /** 所属的map */
+    map: number;
+    /** 房间类型 */
+    type: RoomNodeType;
+    inner: Loc[];
+    border: Loc[];
+    entry: RoomEntry[];
+}
+```
+
+#### 房间内部形状生成
+
 按照系数在地图上划出多个不连通区域标记为房间，标记房间周围一圈为墙壁，随机打开墙壁，标记为入口
 
-### 地图完全生成
+#### 房间连通
 
 将所有房间随机进行连通，不破坏之前标记的墙壁
 
-### 房间分析
+#### 房间分析
 
 根据房间连接图，房间可能是不同类型的，例如说，房间可能是 起点 / 终点，或者其他叶子，割点，甚至不连通节点。
 
@@ -224,6 +241,12 @@ type RoomEntry =
 随机生成房间价值 / 房间回报，回报基于增长系数随机
 
 为房间分配指定价值的消耗和回报
+
+重叠的处理：
+
+入口同时属于多个节点，因此入口可能已经被其他房间设置过，系统会优先处理 叶节点 源汇 和 割点，这些节点的入口总属于它自己
+
+对于其他节点，布设时不会考虑已布设的入口，因为这些节点并不一定有绝对的房间关系
 
 ## 生成BOSS层
 

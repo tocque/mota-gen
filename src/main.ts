@@ -1,9 +1,9 @@
 import './style.css'
-import { gen } from './genLevel';
+import { genLevel } from './genLevel';
 import { genEnemyTemplate } from './genEnemy';
 import { range } from 'lodash-es';
 
-const result = gen({
+const result = genLevel({
   mapCount: 10,
   startLoc: [ 6, 12 ],
   enemies: range(20).map(() => genEnemyTemplate()),

@@ -1,62 +1,26 @@
+import { Enemy, EnemyTemplate, EnemyTemplatePreset, Hero } from "./type";
 import { normalRandom, randomPickElement } from "./utils";
 
-interface EnemyTemplateSeed {
-    name: string;
-    special: number[];
-    hp: number | [number, number];
-    atk: number | [number, number];
-    def: number | [number, number];
-}
-
-export interface EnemyTemplate {
-    seed: EnemyTemplateSeed;
-    /** 随机拥有 先攻(1) 魔攻(2) 坚固(3) 二连击(4) 四种属性 */
-    special: number[];
-    /** 生命值成长率 */
-    hp: [number, number];
-    /** 攻击力成长率 */
-    atk: [number, number];
-    /** 防御力成长率 */
-    def: [number, number];
-}
-
-export interface Hero {
-    atk: number;
-    def: number;
-    mdef: number;
-}
-
-export interface Enemy {
-    special: number[];
-    hp: number;
-    atk: number;
-    def: number;
-}
-
-const presets: EnemyTemplateSeed[] = [
+const presets: EnemyTemplatePreset[] = [
     { name: "史莱姆", special: [], hp: 50, atk: 20, def: 4 },
     { name: "蝙蝠", special: [], hp: 55, atk: 32, def: 2 },
     { name: "大蝙蝠", special: [4], hp: 65, atk: 55, def: 12 },
     { name: "法师", special: [2], hp: 65, atk: 10, def: 5 },
     { name: "骷髅士兵", special: [], hp: 190, atk: 100, def: 5 },
-    { name: "骑士", special: [], hp: 100, atk: [10, 5], def: [30, 10] },
     { name: "丧尸", special: [], hp: 190, atk: 90, def: 33 },
     { name: "双手剑士", special: [], hp: 100, atk: 680, def: 50 },
-    { name: "石头人", special: [3], hp: [30, 0.1], atk: 45, def: 70 },
+    { name: "石头人", special: [3], hp: 30, atk: 45, def: 70 },
 ];
 
 export function genEnemyTemplate(): EnemyTemplate {
     const template = randomPickElement(presets);
 
-    const genValue = (value: number | [ number, number ]): [ number, number ] => {
-        if (typeof value === "number") value = [ value, 1 ];
-        const [ base, growth ] = value;
-        const realBase = Math.max(normalRandom(base, base / 5), 0);
-        return [ realBase, growth ];
+    const genValue = (value: number): number => {
+        return Math.max(normalRandom(value, value / 5), 0);
     }
 
     return {
-        seed: template,
+        preset: template,
         special: [ ...template.special ],
         hp: genValue(template.hp),
         atk: genValue(template.atk),
@@ -112,8 +76,8 @@ export function calDamage(hero: Hero, enemy: Enemy) {
 
 function createEnemy(template: EnemyTemplate, growth: number): Enemy {
 
-    const createValue = ([ base, grow ]: [ number, number ]) => {
-        return Math.ceil(base + base * (growth - 1) * grow);
+    const createValue = (value: number) => {
+        return Math.ceil(value * growth);
     };
 
     return {

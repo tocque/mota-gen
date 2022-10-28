@@ -1,5 +1,5 @@
 import { range, inRange, isEqual, random, cloneDeep, shuffle } from "lodash-es";
-import { EnemyTemplate } from "./genEnemy";
+import { EnemyTemplate } from "./type";
 import { normalRandom, randomPickElement } from "./utils";
 
 type Loc = [number, number];
@@ -121,7 +121,7 @@ function printMap(mapCtx: MapContext) {
     console.log(rows.join('\n'));
 }
 
-function createDisjointSet(size: number) {
+function createDSU(size: number) {
     const pa = range(size);
 
     const findpa = (x: number): number => (x === pa[x] ? x : pa[x] = findpa(pa[x]));
@@ -136,7 +136,7 @@ function createDisjointSet(size: number) {
     }
 }
 
-export function gen(options: GenOptions): MapContext[] {
+export function genLevel(options: GenOptions): MapContext[] {
 
     const {
         mapCount,
@@ -526,7 +526,7 @@ export function gen(options: GenOptions): MapContext[] {
 
         // 生成树 + 加边 -> kruskal 即使两个集合已经相连，也有一定可能性去连边 [10%]
         {
-            const { joint, isJoint } = createDisjointSet(roomCnt + 1);
+            const { joint, isJoint } = createDSU(roomCnt + 1);
 
             const linkEdge = (x: number, y: number) => {
                 const loc = randomPickElement(matrix[x][y]);
@@ -679,13 +679,13 @@ export function gen(options: GenOptions): MapContext[] {
             let i = 0;
             while (i < mapCount) {
                 const begin = i, end = Math.min(i + Math.round(normalRandom(3.5, 1)), mapCount);
-                const rooms: [number, number, Room][] = [];
+                const roomItems: [number, number, Room][] = [];
         
                 maps.slice(begin, end).forEach((map, i) => {
-                    rooms.push(...map.rooms.map((e) => [ i, 0, e ] as [ number, number, Room ]));
+                    roomItems.push(...map.rooms.map((e) => [ i, 0, e ] as [ number, number, Room ]));
                 });
                 // 对房间打分
-                rooms.forEach((room) => {
+                roomItems.forEach((room) => {
                     let score = 0;
                     const [ , , { type, entry, inner } ] = room;
                     score += random(0, 10);
@@ -717,12 +717,16 @@ export function gen(options: GenOptions): MapContext[] {
                         default:
                             score -= 100; break;
                     }
-                    room[0] = score;
+                    room[1] = score;
                 });
 
-                const [ floorId, , room ] = rooms.pop()!;
-                batchMark(maps[floorId].map, room.border, MapMark.WALL_UNBREAK);
-                printMap(maps[floorId]);
+                roomItems.sort((a, b) => a[1] - b[1]);
+                const roomItem = roomItems.pop();
+                if (roomItem) {
+                    const [ floorId, , room ] = roomItem;
+                    batchMark(maps[floorId].map, room.border, MapMark.WALL_UNBREAK);
+                    printMap(maps[floorId]);
+                }
 
                 i = end;
             }
